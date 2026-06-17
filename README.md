@@ -1,0 +1,126 @@
+# Code Security Skills
+
+> Claude Code 插件 — 系统化代码安全审计技能集，覆盖漏洞发现、验证、报告、修复、重审计全流程。
+
+## 技能概览
+
+```mermaid
+graph TD
+    CSA[code-security-audit<br/>4 阶段安全审计]
+    A[audit<br/>/audit 快捷命令]
+    R[reaudit<br/>/reaudit 快捷命令]
+    SF[security-fix-skill<br/>按优先级批量修复]
+
+    A -->|委托 Phase 1-3| CSA
+    R -->|委托 Phase 4| CSA
+    SF -->|调用 /reaudit| R
+    R --> CSA
+```
+
+| 技能 | 触发方式 | 功能 |
+|------|----------|------|
+| `code-security-audit` | "audit this repo", "安全审计" | 系统安全审计：并行探索 → 验证 → 报告 → 重审计 |
+| `audit` | `/audit` | 快捷入口，委托到 code-security-audit Phase 1-3 |
+| `reaudit` | `/reaudit`, "再审计" | 快捷入口，验证修复是否到位 |
+| `security-fix-skill` | "/security-fix", "修安全漏洞" | 按 P1-P4 优先级批量修复审计发现 |
+
+## 安装
+
+### 方式一：通过 Claude Code 插件市场
+
+```bash
+# 从本地目录安装
+claude plugins install g:\AI4Application\claude-useful-skills
+```
+
+### 方式二：手动链接
+
+将 `skills/` 目录下的技能文件夹复制或符号链接到 `~/.claude/skills/`。
+
+**要求：** Claude Code >= 1.0.37（支持插件系统）
+
+## 审计工作流
+
+```mermaid
+flowchart LR
+    subgraph Phase1[Phase 1: 并行探索]
+        A[Agent A<br/>密钥 & 凭据]
+        B[Agent B<br/>输入验证 & 注入]
+        C[Agent C<br/>认证/加密/依赖]
+    end
+
+    Phase1 --> Phase2[Phase 2: 深度验证<br/>确认漏洞真实性<br/>过滤误报<br/>评估严重性]
+    Phase2 --> Phase3[Phase 3: 报告<br/>结构化审计报告<br/>含修复代码]
+    Phase3 --> Phase4[Phase 4: 重审计<br/>验证修复<br/>分类: 已修复/未修复/部分修复<br/>检查回归]
+```
+
+3 个并行 Explore agent 各司其职、独立搜索，最后汇总验证。**覆盖范围远超单一 agent 的广度审计。**
+
+## 漏洞覆盖
+
+17 类漏洞模式，每类提供 grep 搜索模式、典型漏洞代码形态、修复代码模板、CVSS 评分参考：
+
+| 类别 | 类别 | 类别 |
+|------|------|------|
+| 路径遍历 | XSS | SQL 注入 |
+| 命令注入 | SSRF | 不安全反序列化 |
+| CSRF/CORS | 文件权限 | 明文凭据 |
+| 子进程注入 | 认证与会话 | 加密弱点 |
+| 依赖管理 | 临时文件处理 | 环境变量泄露 |
+| 日志伪造 | 竞态条件 (TOCTOU) | — |
+
+## 优势
+
+### 并行化设计，减少审计盲区
+
+传统单 agent 审计受限于单一的搜索策略和思维模型。本技能集采用 3 个独立 agent 并行扫描——密钥凭据、输入验证与注入、认证加密依赖——每个 agent 使用不同的 grep 模式和心理模型，覆盖彼此盲区。
+
+### 4 阶段递进，每步有明确产出
+
+不是"让 AI 扫一遍就出报告"。探索 → 验证 → 报告 → 重审计，阶段间有明确的质量门：
+
+- **Phase 1**：覆盖广度（3 agent 并行）
+- **Phase 2**：覆盖深度（人工核实每条发现）
+- **Phase 3**：结构化交付（含修复代码的完整报告）
+- **Phase 4**：闭环验证（确认修复到位、无回归）
+
+### 可演进的漏洞知识库
+
+`vulnerability-patterns.md` 不是静态的检查清单——每次审计后补充新发现的漏洞模式，grep 模式持续丰富，修复模板持续完善。**技能随着使用变强。**
+
+### 正交分工，组合灵活
+
+- 快速审计：`/audit`
+- 全面审计 + 修复：`code-security-audit` → `security-fix-skill`
+- 验证修复：`/reaudit`
+- 持续集成：将 audit 作为发布前检查步骤
+
+### 实战验证
+
+`security-fix-skill` 的工作流在真实 Python Web 应用项目中打磨，历经 16 个真实漏洞发现和修复（P1-P4），覆盖路径遍历、命令注入、XSS、CSRF、SSRF、明文凭据等。
+
+## 待改进
+
+### 语言覆盖
+
+`vulnerability-patterns.md` 的 grep 模式和代码示例目前偏重 Python 和 JavaScript。Go、Rust、Java、C# 的特定模式尚待补充。
+
+### SAST 工具集成
+
+当前纯靠 LLM agent 的语义理解和 grep 搜索。未来可集成 semgrep、CodeQL 等 SAST 工具作为 Phase 1 的补充信号源，提高低层漏洞（硬编码密钥、不安全函数调用）的检出率。
+
+### 输出格式
+
+审计报告目前仅输出 Markdown。可考虑支持 SARIF 格式（GitHub Code Scanning 兼容）或 JSON，方便接入 CI/CD 流水线。
+
+### 自动化测试
+
+技能的 SKILL.md 内容变更后，缺乏自动化验证手段——无法确认改动的 prompt 是否仍然产生一致的审计质量。未来可建立 eval 基准（含已知漏洞的样例仓库）。
+
+### 依赖校验
+
+4 个技能间通过 `name` 字段字符串引用（如 "load and follow `code-security-audit`"），缺少编译时校验。如果父技能改名，子技能会在运行时而非加载时暴露问题。
+
+## 许可证
+
+[MIT](LICENSE)
