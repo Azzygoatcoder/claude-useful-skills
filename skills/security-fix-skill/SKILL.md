@@ -76,7 +76,7 @@ After all priorities are committed and marked, verify the state:
 
 These patterns recurred across the audit and can be applied quickly:
 
-**Path traversal** — resolve + is_relative_to guard:
+**Path traversal** — resolve + is_relative_to guard (lstrip only blocks absolute paths, not `../`):
 ```python
 file_path = (STATIC_DIR / path.lstrip("/")).resolve()
 if not file_path.is_relative_to(STATIC_DIR.resolve()):

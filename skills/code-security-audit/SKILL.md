@@ -209,7 +209,7 @@ When the user says fixes are applied and wants verification, run an **incrementa
    ```
    Compare against each finding's `FILE` field. Only findings whose files changed are candidates for re-verification.
 
-3. **For each changed-file finding** — read the flagged file at the flagged location, check if the fix is applied:
+3. **For each changed-file finding** — first validate that `FILE` resolves within the project root, then read the flagged location and check if the fix is applied:
    - **Fixed**: Vulnerability pattern removed or guard added → update `STATUS=fixed COMMIT=<hash>`
    - **Not Fixed**: Original vulnerable code still present → update `STATUS=not-fixed`
    - **Partially Fixed**: Some but not all addressed → update `STATUS=partial`
