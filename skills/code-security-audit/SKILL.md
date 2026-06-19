@@ -37,6 +37,24 @@ Do NOT use for:
 
 ## Audit Workflow
 
+### Step 0 — Scope Discovery
+
+Before launching Phase 1, determine the review scope:
+
+1. **Check for a previous audit report** at `docs/SECURITY_AUDIT.md`. If it exists, read the `**Audit commit:** <hash>` field.
+
+2. **If a previous audit exists**, run:
+   ```bash
+   git diff --name-only <last-audit-commit>..HEAD
+   ```
+   These are the **changed files** since the last audit. Inject them into each Phase 1 agent prompt as:
+   ```
+   **Priority files (changed since last audit):** <list of paths>
+   Focus 70% of attention on these files; cover the rest at normal depth.
+   ```
+
+3. **If this is the first audit** (no previous report), skip this step. All files get equal attention.
+
 ### Phase 1 — Parallel Exploration
 
 Launch **3 Explore agents simultaneously** (single message, parallel tool calls). Each agent covers one security domain.
@@ -82,7 +100,17 @@ Explore the codebase at <path> for security issues related to:
 2. Cryptography: weak algorithms (MD5, SHA1, DES), hardcoded keys, improper TLS
 3. Session management: insecure cookies, missing HttpOnly/Secure/SameSite
 4. CSRF protections on state-changing endpoints
-5. Dependency security: unpinned versions, known-vulnerable packages, missing lockfile
+5. Dependency security — check ALL of the following:
+   a. Unpinned versions, missing lockfile
+   b. Run the appropriate command for the project's ecosystem:
+      - Python: pip check (detects version conflicts), safety check (known CVEs)
+      - Node: npm audit, npx check-for-known-vulnerabilities
+      - Rust: cargo audit
+      - Go: govulncheck ./...
+      - Java: mvn dependency-check:check
+   c. If a previous audit report exists, diff the dependency file:
+      git diff <last-audit-commit>..HEAD -- requirements.txt package.json pyproject.toml Cargo.toml go.mod pom.xml
+   d. Flag new dependencies added since last audit — these need extra scrutiny
 6. File permissions: credential files with weak permissions
 7. Temp file handling: predictable names, missing cleanup
 For each finding, assign a stable category prefix:
@@ -94,6 +122,28 @@ Report findings with specific file paths, line numbers, and code snippets.
 **Category-Prefixed IDs are stable** — they don't shift when new findings are added across audits. Use the prefix table in the report template (Phase 3).
 
 **Customize the prompts** based on the codebase language and framework. Add language-specific patterns (e.g., for Python add `os.popen`, for JS add `eval`, for Go add `text/template` without escaping).
+
+**Fallback: if parallel agents fail.** After launching Phase 1 agents, check how many returned valid findings:
+- **3 or 2 valid reports** → proceed normally to Phase 2.
+- **1 or 0 valid reports** → parallel launch failed. Immediately launch a **single comprehensive Agent** covering all three domains:
+
+```
+Explore the codebase at <path> for ALL security issues across three domains:
+
+Domain A — Secrets & Credentials:
+  Hardcoded keys, .env files, credential storage, logging leaks, .gitignore gaps, git history
+
+Domain B — Input Validation & Injection:
+  Command injection, SQL injection, path traversal, deserialization, XSS, SSRF, eval/exec
+
+Domain C — Auth, Cryptography & Dependencies:
+  Auth checks, weak crypto, session management, CSRF, dependency security, file permissions
+
+For each finding, assign a category prefix (SECRET/DEP, SSRF/PATH/CMD/XSS/CODE, AUTH/CRYPTO/DEP).
+Report findings with specific file paths, line numbers, and code snippets.
+```
+
+The comprehensive agent's report replaces the missing parallel reports. Proceed to Phase 2 with whatever results are available.
 
 ### Phase 2 — Deep-Dive Verification
 
