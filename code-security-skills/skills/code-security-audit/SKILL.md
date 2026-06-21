@@ -200,6 +200,21 @@ After receiving all three agent reports:
    | 4 | Can this code path execute in production? | No → informational only; NOT a finding |
    | 5 | Is this a code-quality opinion disguised as a security finding? ("use const", "extract function") | Yes → discard; NOT a finding |
 
+   **Self-Check examples — concrete cases:**
+
+   ```
+   CORRECT kill (check 2): Agent flags "subprocess.run(cmd, shell=True)" at line 42.
+   Guard at line 38: cmd = shlex.quote(user_input). Check 2 finds the guard → NOT a finding.
+
+   CORRECT downgrade (check 3): Agent flags "pickle.load(open(f))" in a test file.
+   Grep found it; no second method confirmed. Check 3 fails → UNCONFIRMED, ceiling = Low.
+
+   CORRECT discard (check 5): "var should be const" → NOT a security finding. Discard.
+
+   WRONG kill: Agent flags "open(user_file)" as path traversal. The agent didn't
+   read the allowlist validation 5 lines above. Check 2 SHOULD have caught this.
+   ```
+
 5. **Assign severity** to each confirmed (and deduplicated) finding:
 
 | Severity | Criteria | MANDATORY ACTION |
@@ -386,6 +401,30 @@ Key categories covered:
 | Forgetting to check .gitignore and git history | Secrets accidentally committed are still in history even if removed from HEAD. |
 | Using sequential IDs (N1, N2...) instead of category prefixes | Sequential IDs shift when new findings are inserted. Use stable category-prefixed IDs (SSRF-1, PATH-1, etc.). |
 | Skipping status annotations in findings | Without `<!-- AUDIT:STATUS=... -->` lines, `mark-fixed` and incremental re-audit cannot work. |
+
+## Do NOT — Negative Heuristics
+
+These actions are FORBIDDEN during an audit. They are the most common ways audits silently degrade:
+
+- **Do NOT skip the Pre-Flight checks** even on a "quick scan." The gate is unconditional.
+- **Do NOT accept an agent finding without reading the flagged code yourself.** Agents summarize; you verify.
+- **Do NOT assign Critical or High severity from a single grep match.** Must be confirmed by a different method.
+- **Do NOT suppress a finding because confidence is low.** That decision belongs to Phase 2, not Phase 1.
+- **Do NOT close a finding because "it's probably fine."** See Meta-Cognition Trap.
+- **Do NOT write the audit report before completing Phase 2 verification.** Phase 3 only after Phase 2.
+- **Do NOT skip status annotations on findings.** Without `<!-- AUDIT:STATUS=... -->`, mark-fixed and incremental re-audit break.
+- **Do NOT use sequential IDs (N1, N2...).** Use category-prefixed IDs (SSRF-1, PATH-1).
+
+## Critical Reminders — read before every audit phase
+
+These rules are NON-NEGOTIABLE and take precedence over all other considerations:
+
+1. **Gate before code**: Pre-Flight checks are unconditional. Never touch a file before they complete.
+2. **Verify before reporting**: Every finding passes the 5-point Self-Check. Fail any check → not a finding.
+3. **Two methods for severity**: Critical/High cannot rest on a single grep hit. Independent confirmation or downgrade.
+4. **Rationalization = escalation**: "probably fine" / "won't reach this code" / "obvious fix" → STOP and re-verify.
+5. **Confidence is reported, not filtered**: Low-confidence findings enter Phase 2. Phase 2 decides, not Phase 1.
+6. **Stable IDs always**: Category-prefixed, sequential within prefix. Never shift existing IDs in re-audits.
 
 ## After the Audit
 
