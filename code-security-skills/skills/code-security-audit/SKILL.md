@@ -37,6 +37,17 @@ Do NOT use for:
 
 ## Audit Workflow
 
+### Pre-Flight — REQUIRED BEFORE Step 0
+
+BEFORE launching any agent or reading any code, complete these checks. This gate is **unconditional** — do not first decide whether the task "needs" it.
+
+1. **Read `references/vulnerability-patterns.md`** — MUST finish before Phase 1. This is a required read, not a reference to skim later.
+2. **Run `git rev-parse HEAD`** — store the audit commit hash for the report header.
+3. **Identify the project language/framework** — run `ls *.py *.js *.ts *.go *.rs *.java 2>/dev/null` to probe. Customize agent grep patterns accordingly. If no code files found, ask the user what language the project uses.
+4. **Check for prior report** — if `docs/SECURITY_AUDIT.md` exists, read the `**Audit commit:**` field. This feeds Step 0.
+
+Any check skipped = audit validity compromised. If you must skip a check, state which one and why BEFORE proceeding.
+
 ### Step 0 — Scope Discovery
 
 Before launching Phase 1, determine the review scope:
@@ -72,6 +83,13 @@ Explore the codebase at <path> for security issues related to secrets, credentia
 For each finding, assign a stable category prefix:
   SECRET (leaked keys/tokens), DEP (file permissions/temp files)
 Report findings with specific file paths, line numbers, and code snippets.
+
+**Confidence annotation — REQUIRED on every finding:**
+- CONFIDENCE=high: exploit confirmed by code trace to user input
+- CONFIDENCE=medium: pattern matches but reachability unclear from grep alone
+- CONFIDENCE=low: suspicious pattern, likely requires context to confirm
+
+CONFIDENCE=low findings MUST still be reported — never suppress them. That filtering decision belongs to Phase 2, not Phase 1.
 ```
 
 **Agent B: Input Validation & Injection**
@@ -90,6 +108,13 @@ For each finding, assign a stable category prefix:
   SSRF (SSRF), PATH (path traversal), CMD (command injection),
   XSS (cross-site scripting), CODE (eval/exec)
 Report findings with specific file paths, line numbers, and code snippets.
+
+**Confidence annotation — REQUIRED on every finding:**
+- CONFIDENCE=high: exploit confirmed by code trace to user input
+- CONFIDENCE=medium: pattern matches but reachability unclear from grep alone
+- CONFIDENCE=low: suspicious pattern, likely requires context to confirm
+
+CONFIDENCE=low findings MUST still be reported — never suppress them. That filtering decision belongs to Phase 2, not Phase 1.
 ```
 
 **Agent C: Auth, Cryptography & Dependencies**
@@ -117,6 +142,13 @@ For each finding, assign a stable category prefix:
   AUTH (missing/weak auth), CRYPTO (weak crypto/TLS),
   DEP (dependencies/file-perms/temp-files)
 Report findings with specific file paths, line numbers, and code snippets.
+
+**Confidence annotation — REQUIRED on every finding:**
+- CONFIDENCE=high: exploit confirmed by code trace to user input
+- CONFIDENCE=medium: pattern matches but reachability unclear from grep alone
+- CONFIDENCE=low: suspicious pattern, likely requires context to confirm
+
+CONFIDENCE=low findings MUST still be reported — never suppress them. That filtering decision belongs to Phase 2, not Phase 1.
 ```
 
 **Category-Prefixed IDs are stable** — they don't shift when new findings are added across audits. Use the prefix table in the report template (Phase 3).
@@ -141,6 +173,9 @@ Domain C — Auth, Cryptography & Dependencies:
 
 For each finding, assign a category prefix (SECRET/DEP, SSRF/PATH/CMD/XSS/CODE, AUTH/CRYPTO/DEP).
 Report findings with specific file paths, line numbers, and code snippets.
+
+**Confidence annotation — REQUIRED on every finding.**
+Same scale: high/medium/low. Low-confidence findings must still be reported.
 ```
 
 The comprehensive agent's report replaces the missing parallel reports. Proceed to Phase 2 with whatever results are available.
@@ -155,14 +190,26 @@ After receiving all three agent reports:
    - Share the same file AND lines are within 15 of each other → same root cause
    - Share the same vulnerability category AND same file → likely the same issue
    - Keep the most detailed description; note both agent sources in the merged entry
-4. **Assign severity** to each confirmed (and deduplicated) finding:
+4. **Run the Finding Self-Check** on every finding BEFORE it enters the report. A finding that fails ANY of these checks is NOT a finding — it is a note or a false positive:
 
-| Severity | Criteria |
-|----------|----------|
-| **Critical** | Remote unauthenticated access to secrets, arbitrary code execution, complete system compromise |
-| **High** | Authenticated access to others' data, privilege escalation, injection with direct impact |
-| **Medium** | Information disclosure, missing hardening, defense-in-depth gaps |
-| **Low** | Best-practice violations with minimal direct risk, cosmetic issues |
+   | # | Check | Fail Action |
+   |---|-------|-------------|
+   | 1 | Can I trace user input to this code without auth? | No → downgrade severity by 1 level |
+   | 2 | Is there a compensating guard within 20 lines? | Yes → document the guard; this is NOT a finding |
+   | 3 | Was this confirmed by a DIFFERENT grep/search than the one that found it? | No → mark UNCONFIRMED; do NOT assign above Low |
+   | 4 | Can this code path execute in production? | No → informational only; NOT a finding |
+   | 5 | Is this a code-quality opinion disguised as a security finding? ("use const", "extract function") | Yes → discard; NOT a finding |
+
+5. **Assign severity** to each confirmed (and deduplicated) finding:
+
+| Severity | Criteria | MANDATORY ACTION |
+|----------|----------|------------------|
+| **Critical** | Remote + unauthenticated → secret access OR arbitrary code execution | **BLOCKER**: Must be confirmed by 2 independent methods. Do not proceed to next finding until a verified exploit path is documented. |
+| **High** | Authenticated privilege escalation, injection with confirmed data impact | Must include reproduction steps. Single-method detection → downgrade to Medium. |
+| **Medium** | Information disclosure, missing hardening, defense-in-depth gaps | Must note whether compensating controls exist within the codebase. |
+| **Low** | Best-practice violations with minimal direct risk | Aggregate into one section. Do NOT spend more than 2 minutes verifying per finding. |
+
+NON-NEGOTIABLE: If a finding cannot meet its severity tier's mandatory action, it MUST be downgraded to the next tier where the action is achievable.
 
 5. **Assign a stable category-prefixed ID** to each finding using this table:
 
@@ -179,6 +226,17 @@ After receiving all three agent reports:
 | `STATE` | Shared mutable state | Global state without isolation |
 
 Number sequentially within each prefix: `SSRF-1`, `SSRF-2`, `PATH-1`, etc.
+
+### Meta-Cognition Trap — watch for these internal signals
+
+During Phase 2 verification, if you find yourself thinking any of the following, STOP. These are rationalization signals, not valid verification:
+
+- **"This is probably fine in practice"** → That IS the signal to escalate, not dismiss. Probabilities are not verification. Trace the dataflow before closing.
+- **"User input will never reach this code"** → Assumption-based dismissal is the #1 source of false negatives. Verify with a concrete code path, not intuition.
+- **"The fix is obvious, no need to document it"** → Every finding MUST include concrete remediation code. No exceptions. An undocumented fix is not a fix.
+- **"This is just how the framework works"** → Frameworks have CVEs too. Flag it; let the report reader decide.
+
+These are NOT valid reasons to close a finding. When you catch yourself using them, reopen the finding for deeper review.
 
 ### Phase 3 — Report Compilation
 

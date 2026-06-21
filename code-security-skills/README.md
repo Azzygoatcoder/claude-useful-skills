@@ -1,6 +1,6 @@
 # Code Security Skills
 
-> Claude Code 插件 — 系统化代码安全审计技能集，覆盖漏洞发现、验证、报告、修复、重审计全流程。**v1.2.0**
+> Claude Code 插件 — 系统化代码安全审计技能集，覆盖漏洞发现、验证、报告、修复、重审计全流程。**v1.3.0**
 
 ## 技能概览
 
@@ -190,6 +190,7 @@ flowchart LR
 
 | 版本 | 日期 | 变更 |
 | ---- | ---- | ---- |
+| **1.3.0** | 2026-06-21 | FABLE-5 风格指令重写：Pre-Flight Gate、Confidence 标注、Self-Check Gate、严重性动作绑定、Meta-Cognition Trap |
 | **1.2.0** | 2026-06-19 | Step 0 自动 diff 变更文件、单 Agent 并行失败兜底、Agent C 依赖冲突/CVE 检查 |
 | **1.1.1** | 2026-06-18 | 自审计修复：XSS 单引号转义、git add -u、示例占位符化、plugin.json 元数据、路径校验、atexit 文档 |
 | **1.1.0** | 2026-06-18 | 状态追踪注解、分类前缀 ID、增量 re-audit、Phase 2 去重、mark-fixed/status 轻量操作 |
